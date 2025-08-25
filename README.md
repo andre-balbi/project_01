@@ -256,9 +256,3 @@ Este pipeline é projetado com flexibilidade em mente, particularmente em termos
 - Melhores práticas DevOps para fluxos de trabalho de engenharia de dados
 
 Este projeto serve como um exemplo abrangente de práticas modernas de engenharia de dados, demonstrando a capacidade de projetar, implementar e manter pipelines de transformação de dados de escala empresarial com dbt.
-
-
-
-
-
-teste01
