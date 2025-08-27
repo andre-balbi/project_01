@@ -2,7 +2,7 @@
 name: 'project_01'
 version: '1.0.0'
 
-profile: 'dbt-airflow-469721'
+profile: 'dbt-airflow-profile' # <-- Nome do profile (igual ao especificado em profiles.yml)
 
 model-paths: ["models"]
 analysis-paths: ["analyses"]
