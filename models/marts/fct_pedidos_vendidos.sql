@@ -1,6 +1,6 @@
 {{
     config(
-        tags=['vendas']
+        tags=['vendas', 'fct']
     )
 }}
 
