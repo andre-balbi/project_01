@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  CI_job:
+  ci_job:
     runs-on: ubuntu-latest
 
     env:
@@ -48,7 +48,7 @@ jobs:
             | sed 's/.*artifacts\/\([0-9]*\)\/zip.*/\1/')
 
           if [ -z "$artifact_id" ]; then
-            echo "❌ Manifest artifact not found. Proceeding with full build."
+            echo "⚠️ Manifest artifact not found. Will run full dbt build."
           else
             echo "✅ Found artifact ID: $artifact_id"
             curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -71,9 +71,11 @@ jobs:
       - name: Run dbt models and tests
         run: |
           if [ -f "./prod_state/manifest.json" ]; then
+            echo "🚀 Running SLIM CI with state:modified+"
             dbt run -s 'state:modified+' --defer --state ./prod_state --target dev
             dbt test -s 'state:modified+' --defer --state ./prod_state --target dev
           else
+            echo "🚀 Running FULL dbt build (no manifest found)"
             dbt run --target dev
             dbt test --target dev
           fi
