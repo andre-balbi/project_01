@@ -5,7 +5,7 @@ dbt-airflow-profile:
       type: bigquery
       method: service-account-json
       project: "{{ env_var('DBT_ENV_SECRET_PROJECT_ID') }}"
-      dataset: "dev"
+      dataset: "{{ 'pr_' ~ var('schema_id', 'dev') if var('schema_id', '') else 'dev' }}"
       threads: 4 # Must be a value of 1 or greater
 
       # These fields come from the service account json keyfile
