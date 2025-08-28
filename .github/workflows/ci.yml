@@ -34,6 +34,7 @@ jobs:
         run: pip install -r dbt-requirements.txt
 
       - name: Download latest manifest.json artifact from main
+        id: download_manifest
         shell: bash
         run: |
           echo "🔍 Fetching manifest artifact from main..."
@@ -48,7 +49,8 @@ jobs:
             | sed 's/.*artifacts\/\([0-9]*\)\/zip.*/\1/')
 
           if [ -z "$artifact_id" ]; then
-            echo "⚠️ Manifest artifact not found. Proceeding with full dbt build."
+            echo "⚠️ Manifest artifact not found. Will run FULL build."
+            echo "found_manifest=false" >> $GITHUB_OUTPUT
           else
             echo "✅ Found artifact ID: $artifact_id"
             curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -57,6 +59,7 @@ jobs:
                 -o artifact.zip
             unzip -q artifact.zip -d prod_state
             echo "✅ manifest.json extracted to ./prod_state/"
+            echo "found_manifest=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Run dbt debug
@@ -70,7 +73,7 @@ jobs:
 
       - name: Run dbt models and tests
         run: |
-          if [ -f "./prod_state/manifest.json" ]; then
+          if [ "${{ steps.download_manifest.outputs.found_manifest }}" = "true" ]; then
             echo "🚀 Running SLIM CI with state:modified+"
             dbt run -s 'state:modified+' --defer --state ./prod_state --target dev
             dbt test -s 'state:modified+' --defer --state ./prod_state --target dev
