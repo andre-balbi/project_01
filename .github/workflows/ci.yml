@@ -46,7 +46,7 @@ jobs:
           artifact_id=$(grep -A10 '"name": "dbt-manifest"' artifacts.json \
             | grep '"archive_download_url":' \
             | head -n1 \
-            | sed 's/.*artifacts\/\([0-9]*\)\/zip.*/\1/')
+            | sed 's/.*artifacts\/\([0-9]*\)\/zip.*/\1/' || true)
 
           if [ -z "$artifact_id" ]; then
             echo "⚠️ Manifest artifact not found. Will run FULL build."
