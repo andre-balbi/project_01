@@ -1,4 +1,4 @@
-bigquery_sandbox:
+dbt-airflow-profile:
   target: dev
   outputs:
     dev:
