@@ -2,20 +2,17 @@ name: CI_action
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   CI_job:
     runs-on: ubuntu-latest
-    
-    # ✅ Permissions needed to read artifacts
-    permissions:
-      contents: read
-      actions: read
 
-    # 🔵 BigQuery credentials
     env:
+
+      GCLOUD_SERVICE_KEY: ${{ secrets.GCLOUD_SERVICE_KEY }}
+      GCLOUD_STORAGE_PATH_MANIFEST: ${{ secrets.GCLOUD_STORAGE_PATH_MANIFEST }}
       DBT_ENV_SECRET_TYPE: ${{ secrets.DBT_ENV_SECRET_TYPE }} 
       DBT_ENV_SECRET_PROJECT_ID: ${{ secrets.DBT_ENV_SECRET_PROJECT_ID }}
       DBT_ENV_SECRET_PRIVATE_KEY_ID: ${{ secrets.DBT_ENV_SECRET_PRIVATE_KEY_ID }} 
@@ -25,116 +22,56 @@ jobs:
       DBT_ENV_SECRET_AUTH_URI: ${{ secrets.DBT_ENV_SECRET_AUTH_URI }}
       DBT_ENV_SECRET_TOKEN_URI: ${{ secrets.DBT_ENV_SECRET_TOKEN_URI }}
       DBT_ENV_SECRET_AUTH_PROVIDER_X509_CERT_URL: ${{ secrets.DBT_ENV_SECRET_AUTH_PROVIDER_X509_CERT_URL }} 
-      DBT_ENV_SECRET_CLIENT_X509_CERT_URL: ${{ secrets.DBT_ENV_SECRET_CLIENT_X509_CERT_URL }}
-
-      DBT_TARGET: pr
-      # Artifact name that CD pipeline creates
-      MANIFEST_ARTIFACT_NAME: dbt-manifest
+      DBT_ENV_SECRET_CLIENT_X509_CERT_URL: ${{ secrets.DBT_ENV_SECRET_CLIENT_X509_CERT_URL }} 
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.12'
 
-      - name: Install dependencies
-        # Ensure dbt-requirements.txt includes: dbt-bigquery==1.9.*
-        run: pip install -r dbt-requirements.txt
+    - name: Install dependencies
+      run: pip install -r dbt-requirements.txt
 
-      # ---- Get PR-scoped schema suffix ----
-      - name: Get Schema ID
-        id: schema_id
-        run: echo "SCHEMA_ID=${{ github.event.pull_request.number }}__$(echo ${{ github.event.pull_request.head.sha }} | cut -c1-7 | tr '[:lower:]' '[:upper:]')" >> $GITHUB_ENV
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v0.4.3
+      with:
+        credentials_json: ${{ secrets.GCLOUD_SERVICE_KEY }}
 
-      # ---- Download manifest from MAIN for slim CI ----
-      - name: Download latest manifest artifact
-        shell: bash
-        run: |
-          echo "🔍 Fetching artifact list..."
-          echo "🔗 Repository: ${{ github.repository }}"
-          echo "🎯 Looking for artifact: ${{ env.MANIFEST_ARTIFACT_NAME }}"
-          
-          # Test API access first
-          response=$(curl -s -w "%{http_code}" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/artifacts" \
-              -o artifacts.json)
-          
-          echo "📡 API Response Code: $response"
-          
-          if [ "$response" != "200" ]; then
-            echo "❌ API call failed with code: $response"
-            echo "📄 Response content:"
-            cat artifacts.json
-            exit 1
-          fi
-          
-          echo "✅ API call successful"
-          echo "📋 Available artifacts:"
-          cat artifacts.json | grep -o '"name":"[^"]*"' | head -10
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.DBT_ENV_SECRET_PROJECT_ID }}
 
-          # Extract correct artifact ID by getting download URL
-          artifact_id=$(grep -A10 '"name": "${{ env.MANIFEST_ARTIFACT_NAME }}"' artifacts.json \
-            | grep '"archive_download_url":' \
-            | head -n1 \
-            | sed 's/.*artifacts\/\([0-9]*\)\/zip.*/\1/')
+    - name: Copy manifest.json from Google Cloud Storage
+      run: |
+        gsutil cp gs://${{ env.GCLOUD_STORAGE_PATH_MANIFEST }}/manifest.json ./ || echo "Manifest not found"
+    
+    - name: Get Schema ID
+      id: schema_id
+      run: echo "SCHEMA_ID=${{ github.event.pull_request.number }}__${{ github.sha }}" >> $GITHUB_ENV
 
-          if [ -z "$artifact_id" ]; then
-            echo "❌ Artifact '${{ env.MANIFEST_ARTIFACT_NAME }}' not found."
-            echo "📋 All available artifacts:"
-            cat artifacts.json | jq '.artifacts[].name' 2>/dev/null || echo "jq not available"
-            exit 1
-          fi
+    - name: Run dbt debug
+      run: |
+        dbt debug --target pr --vars "schema_id: $SCHEMA_ID"
 
-          echo "✅ Found artifact ID: $artifact_id"
-          echo "⬇️ Downloading artifact..."
+    - name: Run dbt deps
+      run: |
+        dbt deps --target pr --vars "schema_id: $SCHEMA_ID"
 
-          curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip" \
-              -o artifact.zip
+    - name: Run dbt build
+      run: |
+        if [ -f "./manifest.json" ]; then
+          dbt build -s 'state:modified+' --defer --state ./ --target pr --vars "schema_id: $SCHEMA_ID"
+        else
+          dbt build --target pr --vars "schema_id: $SCHEMA_ID"
+        fi
 
-          unzip -q artifact.zip -d state
-          echo "✅ Artifact extracted to ./state/"
-          ls -lh state
-
-      - name: Use state manifest if present
-        run: |
-          if [ -f "./state/manifest.json" ]; then
-            cp ./state/manifest.json ./manifest.json
-            echo "✅ Using manifest.json from main for state:modified+ and --defer"
-          else
-            echo "❌ No production manifest found; running a full PR build"
-          fi
-
-      # ---- dbt steps ----
-      - name: dbt debug
-        run: |
-          dbt debug --target $DBT_TARGET --vars "schema_id: $SCHEMA_ID"
-
-      - name: dbt deps
-        run: |
-          dbt deps --target $DBT_TARGET --vars "schema_id: $SCHEMA_ID"
-
-      - name: dbt seed first
-        run: |
-          dbt seed --target $DBT_TARGET --vars "schema_id: $SCHEMA_ID"
-
-      - name: dbt build (slim CI when state is available)
-        run: |
-          if [ -f "./manifest.json" ]; then
-            dbt run -s 'state:modified+' --defer --state ./state --target $DBT_TARGET --vars "schema_id: $SCHEMA_ID"
-            dbt test -s 'state:modified+' --defer --state ./state --target $DBT_TARGET --vars "schema_id: $SCHEMA_ID"
-          else
-            dbt run --target $DBT_TARGET --vars "schema_id: $SCHEMA_ID"
-            dbt test --target $DBT_TARGET --vars "schema_id: $SCHEMA_ID"
-          fi
-
-      - name: Drop PR schema
-        run: |
-          dbt run-operation drop_pr_staging_schemas \
-            --args '{"project_id": "${{ secrets.DBT_ENV_SECRET_PROJECT_ID }}", "PR_number": "${{ github.event.pull_request.number }}"}' \
-            --profiles-dir ./
+    - name: Drop PR schema
+      run: |
+        dbt run-operation drop_pr_staging_schemas \
+          --args '{"project_id": "${{ secrets.DBT_ENV_SECRET_PROJECT_ID }}", "PR_number": "${{ github.event.pull_request.number }}"}' \
+          --profiles-dir ./
