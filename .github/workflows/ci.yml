@@ -48,7 +48,7 @@ jobs:
             | sed 's/.*artifacts\/\([0-9]*\)\/zip.*/\1/')
 
           if [ -z "$artifact_id" ]; then
-            echo "⚠️ Manifest artifact not found. Will run full dbt build."
+            echo "⚠️ Manifest artifact not found. Proceeding with full dbt build."
           else
             echo "✅ Found artifact ID: $artifact_id"
             curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
