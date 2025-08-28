@@ -62,12 +62,18 @@ jobs:
       run: |
         dbt deps --target pr --vars "schema_id: $SCHEMA_ID"
 
-    - name: Run dbt build
+    - name: Run dbt seed first
+      run: |
+        dbt seed --target pr --vars "schema_id: $SCHEMA_ID"
+
+    - name: Run dbt models and tests
       run: |
         if [ -f "./manifest.json" ]; then
-          dbt build -s 'state:modified+' --defer --state ./ --target pr --vars "schema_id: $SCHEMA_ID"
+          dbt run -s 'state:modified+' --defer --state ./ --target pr --defer-target prod --vars "schema_id: $SCHEMA_ID"
+          dbt test -s 'state:modified+' --defer --state ./ --target pr --defer-target prod --vars "schema_id: $SCHEMA_ID"
         else
-          dbt build --target pr --vars "schema_id: $SCHEMA_ID"
+          dbt run --target pr --vars "schema_id: $SCHEMA_ID"
+          dbt test --target pr --vars "schema_id: $SCHEMA_ID"
         fi
 
     - name: Drop PR schema
