@@ -66,3 +66,11 @@ jobs:
     - name: Copy new manifest.json to Google Cloud Storage
       run: |
         gsutil cp ./target/manifest.json gs://${{ env.GCLOUD_STORAGE_PATH_MANIFEST }}/
+
+    # 🚀 Upload manifest as GitHub artifact for CI to use
+    - name: Upload production manifest artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: dbt-manifest
+        path: ./target/manifest.json
+        retention-days: 30
