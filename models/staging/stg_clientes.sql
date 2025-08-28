@@ -1,3 +1,4 @@
+-- Teste de defer
 with source as (
     select
     *
