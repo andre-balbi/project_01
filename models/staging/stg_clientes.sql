@@ -6,4 +6,4 @@ with source as (
 
 select
 *
-from source -- xx ---
+from source

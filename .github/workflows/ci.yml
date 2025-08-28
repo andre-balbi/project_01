@@ -69,8 +69,8 @@ jobs:
     - name: Run dbt models and tests
       run: |
         if [ -f "./manifest.json" ]; then
-          dbt run -s 'state:modified+' --defer --state ./ --target pr --defer-target prod --vars "schema_id: $SCHEMA_ID"
-          dbt test -s 'state:modified+' --defer --state ./ --target pr --defer-target prod --vars "schema_id: $SCHEMA_ID"
+          dbt run -s 'state:modified+' --defer --state ./ --target pr --vars "schema_id: $SCHEMA_ID"
+          dbt test -s 'state:modified+' --defer --state ./ --target pr --vars "schema_id: $SCHEMA_ID"
         else
           dbt run --target pr --vars "schema_id: $SCHEMA_ID"
           dbt test --target pr --vars "schema_id: $SCHEMA_ID"
