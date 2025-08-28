@@ -48,7 +48,8 @@ jobs:
 
     - name: Copy manifest.json from Google Cloud Storage
       run: |
-        gsutil cp gs://${{ env.GCLOUD_STORAGE_PATH_MANIFEST }}/manifest.json ./ || echo "Manifest not found"
+        mkdir -p prod_state
+        gsutil cp gs://${{ env.GCLOUD_STORAGE_PATH_MANIFEST }}/manifest.json ./prod_state/manifest.json || echo "Manifest not found"
     
     - name: Run dbt debug
       run: |
@@ -64,9 +65,9 @@ jobs:
 
     - name: Run dbt models and tests
       run: |
-        if [ -f "./manifest.json" ]; then
-          dbt run -s 'state:modified+' --defer --state ./ --target dev
-          dbt test -s 'state:modified+' --defer --state ./ --target dev
+        if [ -f "./prod_state/manifest.json" ]; then
+          dbt run -s 'state:modified+' --defer --state ./prod_state --target dev
+          dbt test -s 'state:modified+' --defer --state ./prod_state --target dev
         else
           dbt run --target dev
           dbt test --target dev
