@@ -48,32 +48,29 @@ jobs:
 
     - name: Copy manifest.json from Google Cloud Storage
       run: |
-        gsutil cp gs://${{ env.GCLOUD_STORAGE_PATH_MANIFEST }}/manifest.json ./ || echo "Manifest not found"
+        mkdir -p prod_state
+        gsutil cp gs://${{ env.GCLOUD_STORAGE_PATH_MANIFEST }}/manifest.json ./prod_state/manifest.json || echo "Manifest not found"
     
-    - name: Get Schema ID
-      id: schema_id
-      run: echo "SCHEMA_ID=${{ github.event.pull_request.number }}__${{ github.sha }}" >> $GITHUB_ENV
-
     - name: Run dbt debug
       run: |
-        dbt debug --target dev --vars "schema_id: $SCHEMA_ID"
+        dbt debug --target dev
 
     - name: Run dbt deps
       run: |
-        dbt deps --target dev --vars "schema_id: $SCHEMA_ID"
+        dbt deps --target dev
 
     - name: Run dbt seed first
       run: |
-        dbt seed --target dev --vars "schema_id: $SCHEMA_ID"
+        dbt seed --target dev
 
     - name: Run dbt models and tests
       run: |
-        if [ -f "./manifest.json" ]; then
-          dbt run -s 'state:modified+' --defer --state ./ --target dev --vars "schema_id: $SCHEMA_ID"
-          dbt test -s 'state:modified+' --defer --state ./ --target dev --vars "schema_id: $SCHEMA_ID"
+        if [ -f "./prod_state/manifest.json" ]; then
+          dbt run -s 'state:modified+' --defer --state ./prod_state --target dev
+          dbt test -s 'state:modified+' --defer --state ./prod_state --target dev
         else
-          dbt run --target dev --vars "schema_id: $SCHEMA_ID"
-          dbt test --target dev --vars "schema_id: $SCHEMA_ID"
+          dbt run --target dev
+          dbt test --target dev
         fi
 
     - name: Drop PR schema
